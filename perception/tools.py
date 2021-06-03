@@ -355,5 +355,6 @@ class SaferMatcher:
             data=str(json.dumps(body)).encode('utf-8'),
             headers=headers,
             method='POST')
-        res = urllib.request.urlopen(req)
-        return json.loads(res.read().decode('utf-8'))
+        with urllib.request.urlopen(req) as res:
+            ret = json.loads(res.read().decode('utf-8'))
+        return ret
