@@ -368,7 +368,10 @@ def read(filepath_or_buffer: ImageInputType, timeout=None):
         if not os.path.isfile(filepath_or_buffer):
             raise FileNotFoundError('Could not find image at path: ' +
                                     filepath_or_buffer)
-        image = cv2.imread(filepath_or_buffer)
+        with PIL.Image.open(filepath_or_buffer) as im:
+            _ = im.convert("RGB")
+        return np.array(_)
+        # image = cv2.imread(filepath_or_buffer)
     else:
         raise RuntimeError("Unhandled filepath_or_buffer type: " +
                            str(type(filepath_or_buffer)))
