@@ -154,6 +154,101 @@ def deduplicate_hashes(
     return list(set(pairs))
 
 
+def deduplicate_hashe_2(
+        hashes1: typing.List[typing.Tuple[str, typing.Union[str, np.ndarray]]],
+        hashes2: typing.List[typing.Tuple[str, typing.Union[str, np.ndarray]]],
+        threshold: float,
+        hash_format: str = 'base64',
+        hasher: perception_hashers.ImageHasher = None,
+        hash_length: int = None,
+        hash_dtype: str = None,
+        distance_metric: str = None,
+        progress: 'tqdm.tqdm' = None) -> typing.List[typing.Tuple[str, str]]:
+    """Find duplicates using a list of precomputed hashes.
+
+    Args:
+        hashes1: A list of (id, hash) tuples, to be checked against main image set
+        hashes2: A list of (id, hash) tuples, from the "database" image set
+        threshold: A distance threshold
+        hasher: A hasher to use for computing distances
+        progress: A tqdm object for reporting progress
+
+    Returns:
+        A list of duplicated 1-to-N (N>=1) pairs. Each pair is a tuple with the format of:
+        (
+            file_id_from_hashes1,
+            [(dist1, file1_id_from_hashes2), ..., (distN, fileN_id_from_hashes2)]
+        )
+    """
+    assert (
+        hash_length is not None and
+        hash_dtype is not None and
+        distance_metric is not None
+    ) or (
+        hasher is not None
+    ), \
+        (
+            'You must provide either `hasher` or all of '
+            '`hash_length`, `hash_dtype`, and `distance_metric`.'
+        )
+    if hasher is not None:
+        assert all(k is None for k in [hash_length, hash_dtype, distance_metric]), \
+            'If hasher is provided, hash_length, hash_dtype, and distance_metric must all be None.'
+        hash_length = hasher.hash_length
+        hash_dtype = hasher.dtype
+        distance_metric = hasher.distance_metric
+    assert hash_length is not None
+    assert isinstance(hash_dtype, str)
+    assert isinstance(distance_metric, str)
+    # If there is more than one hash for an id, we want them
+    # to be sequential in case we are able to use the more
+    # efficient distance calculation (compute_euclidean_pairwise_duplicates)
+    # that skips computation of distance between two hashes for the same file.
+    vectors1 = np.array([
+        perception_hashers.tools.string_to_vector(
+            hash_string=hash_string_or_vector,
+            hash_format=hash_format,
+            hash_length=hash_length,
+            dtype=hash_dtype)
+        if isinstance(hash_string_or_vector, str) else hash_string_or_vector
+        for _, hash_string_or_vector in hashes1
+    ])
+    vectors2 = np.array([
+        perception_hashers.tools.string_to_vector(
+            hash_string=hash_string_or_vector,
+            hash_format=hash_format,
+            hash_length=hash_length,
+            dtype=hash_dtype)
+        if isinstance(hash_string_or_vector, str) else hash_string_or_vector
+        for _, hash_string_or_vector in hashes2
+    ])
+
+    files1 = np.array([identifier for identifier, _ in hashes1])
+    files2 = np.array([identifier for identifier, _ in hashes2])
+    
+    pairs = []
+    n_hashes = len(vectors1)
+
+    if distance_metric != 'euclidean' or 'int' not in hash_dtype or extensions is None:
+        iterator = range(n_hashes)
+        if progress is not None:
+            iterator = progress(
+                iterator, total=n_hashes, desc='Deduplicating.')
+        distances = spatial.distance.cdist(vectors1, vectors2, metric=distance_metric)
+        for idx in iterator:
+            dist = distances[idx]
+            current_file = files1[idx]
+            duplicated_dists = dist[dist < threshold]
+            if duplicated_dists:
+                duplicated_files = files2[dist < threshold]
+                duplicates = list(zip(duplicated_dists, duplicated_files))
+                pairs.append((current_file, duplicates))
+    else:
+        # not implemented yet
+        pass
+    return pairs        
+
+
 # pylint: disable=too-many-locals
 def deduplicate(
         files: typing.List[str],
