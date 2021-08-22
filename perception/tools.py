@@ -154,7 +154,7 @@ def deduplicate_hashes(
     return list(set(pairs))
 
 
-def deduplicate_hashe_2(
+def deduplicate_two_groups(
         hashes1: typing.List[typing.Tuple[str, typing.Union[str, np.ndarray]]],
         hashes2: typing.List[typing.Tuple[str, typing.Union[str, np.ndarray]]],
         threshold: float,
